@@ -1,13 +1,14 @@
 import nltk.data
+import os
 import pandas as pd
 from time import time
 from nltk import word_tokenize
 from KaggleWord2VecUtility import KaggleWord2VecUtility
 
-PAT_THRES = 500      # Pattern must occur at least this many times per million words to bother considering it relevant.
-HFW_THRES = 100      # Term must occur at least this many times per million words to be considered 'high frequency'.
-CW_THRES  = 1000     # Term must occur at most this many times per million words to be considered a 'content word'.
-THRES_PER = 1000000  # Threshold values above are treated under the ratio "x per y", where this value is y.
+THRES_PER = 300000 
+PAT_THRES = 100     # Pattern must occur at least this many times per THRES_PER words to bother considering it relevant.
+HFW_THRES = 30      # Term must occur at least this many times per THRES_PER words to be considered 'high frequency'.
+CW_THRES  = 300     # Term must occur at most this many times per THRES_PER words to be considered a 'content word'.
 t0 = time()
 
 #=======================================================================================
@@ -15,9 +16,9 @@ t0 = time()
 #=======================================================================================
 print("Loading data to extract patterns from...")
 
-extract_data = pd.read_csv('data/labeledTrainData.tsv', delimiter="\t", quoting=3, quotechar='"', usecols=['review'])
+extract_data = pd.read_csv('data/unlabeledTrainData.tsv', delimiter="\t", quoting=3, quotechar='"', usecols=['review'])
 extract_data = extract_data.append(pd.read_csv('data/testData.tsv', delimiter="\t", quoting=3, quotechar='"', usecols=['review']), ignore_index=True)
-extract_data = extract_data.append(pd.read_csv('data/unlabeledTrainData.tsv', delimiter="\t", quoting=3, quotechar='"', usecols=['review']), ignore_index=True)
+extract_data = extract_data.append(pd.read_csv('data/labeledTrainData.tsv', delimiter="\t", quoting=3, quotechar='"', usecols=['review']), ignore_index=True)
 
 print(str(extract_data['review'].size)+" reviews loaded.")
 
@@ -35,7 +36,7 @@ cw_dict  = dict()
 for review in extract_data['review']:
 	progress_count += 1
 	if progress_count % 2500 == 0:
-		print("Reviews processed so far: "+str(progress_count)+" (%0.3fs)" % (time() - t0))
+		print("Reviews processed so far: "+str(progress_count)+" (%0.2fs)" % (time() - t0))
 
 	for word in word_tokenize(review):
 		num_words += 1
@@ -75,45 +76,87 @@ def pattern_recurse(tok_sentence, hfws, cws, ind, cur_pattern, num_hfw, num_cw):
 
 	if hfws.get(tok_sentence[ind].lower()) != None:
 		if num_hfw >= 1 and num_cw >= 1:
-			pat_so_far.append(cur_pattern+"_HFW")
-		pat_so_far += pattern_recurse(tok_sentence, hfws, cws, ind+1, cur_pattern+"_HFW", num_hfw+1, num_cw)
+			pat_so_far.append(cur_pattern+"_"+tok_sentence[ind].lower())
+		pat_so_far += pattern_recurse(tok_sentence, hfws, cws, ind+1, cur_pattern+"_"+tok_sentence[ind].lower(), num_hfw+1, num_cw)
 
 	if cws.get(tok_sentence[ind].lower()) != None:
 		if num_hfw >= 2:
-			pat_so_far.append(cur_pattern+"_"+tok_sentence[ind].lower())
-		pat_so_far += pattern_recurse(tok_sentence, hfws, cws, ind+1, cur_pattern+"_"+tok_sentence[ind].lower(), num_hfw, num_cw+1)	
+			pat_so_far.append(cur_pattern+"_CW")
+		pat_so_far += pattern_recurse(tok_sentence, hfws, cws, ind+1, cur_pattern+"_CW", num_hfw, num_cw+1)	
 
 	return pat_so_far
 
 print("Now, extracting patterns...")
 
-patterns = dict()
 sentence_tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
 progress_count = 0
+word_dump_log = 0
+patterns = dict()
 
 for review in extract_data['review']:
 	progress_count += 1
 	if progress_count % 500 == 0:
-		print("Reviews processed so far: "+str(progress_count)+" (%0.3fs)" % (time() - t0))
+		print("Reviews processed so far: "+str(progress_count)+" (%0.2fs)" % (time() - t0))
 
 	for sentence in KaggleWord2VecUtility.review_to_sentences(review, sentence_tokenizer):
+		word_dump_log += len(sentence)
 		sent_patterns = sentence_to_patterns(sentence, hfw_dict, cw_dict)
 		for pattern in sent_patterns:
 			if patterns.get(pattern) == None:
 				patterns[pattern] = 1
 			else:
 				patterns[pattern] += 1
+		
+		#Have to work-around this with disk IO, unfortunately, because storing all patterns to an in-memory dict requires many many GB worth of RAM.
+		#Dump all patterns to file every several hundred thousand words or so...
+		if word_dump_log > THRES_PER:
+			print("Pausing to dump patterns to disk...")
+			word_dump_log = 0
+			for _ in range(len(patterns.items())):
+				out_pattern = patterns.popitem()
+
+				if out_pattern[1] >= PAT_THRES:
+					old_count = 0
+					if os.path.isfile("pattern_temp/"+out_pattern[0]):
+						f = open("pattern_temp/"+out_pattern[0], 'r')
+						old_count = int(f.readline())
+						f.close()
+
+					f = open("pattern_temp/"+out_pattern[0], 'w')
+					f.write(str(old_count+out_pattern[1]))
+					f.close()		
+			print("Done. (%0.2fs)" % (time() - t0))	
 
 #=======================================================================================
 #  Output patterns
 #=======================================================================================
-print("Writing patterns to file...")
-f = open("extracted_patterns.txt", 'w')
+print("Gathering final patterns from disk... (%0.2fs)" % (time() - t0))
 
+patterns = dict()
+for pattern in os.listdir("pattern_temp"):
+	f = open("pattern_temp/"+pattern, 'r')
+	patterns[pattern] = int(f.readline())
+	f.close()
+	os.remove("pattern_temp/"+pattern)
+
+print("Writing patterns to file... (%0.2fs)" % (time() - t0))
+f = open("extracted_patterns.txt", 'w')
 for pattern in sorted(patterns, key=patterns.get, reverse=True):
 	pattern_count = patterns[pattern]
-	if pattern_count >= PAT_THRES*(num_words/THRES_PER):
-		f.write(str(pattern_count)+":"+pattern+"\n")
+	f.write(str(pattern_count)+":"+pattern+"\n")
 f.close()
 
+f = open("HFWs.txt", 'wb')
+for _ in range(len(hfw_dict.items())):
+	hfw = hfw_dict.popitem()
+	f.write(bytes(hfw[0]+"\n", 'utf-8'))
+f.close()
+
+f = open("CWs.txt", 'wb')
+for _ in range(len(cw_dict.items())):
+	cw = cw_dict.popitem()
+	f.write(bytes(cw[0]+"\n", 'utf-8'))
+f.close()
+
+print("All done! (%0.2fs)" % (time() - t0))
 
