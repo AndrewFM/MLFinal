@@ -1,9 +1,16 @@
+"""
+A mass extraction of (notable) sentence patterns from the entire collection of 100,000 IMDB reviews.
+Pattern extraction based on (Davidov et.al 2010) "Semi-Supervised Recognition of Sarcastic Sentences in Twitter and Amazon"
+
+@author andrew
+"""
+
 import nltk.data
 import os
 import pandas as pd
 from time import time
 from nltk import word_tokenize
-from pattern_functions import sentence_to_patterns
+from pattern_functions import sentence_to_patterns, ord_to_pattern, pattern_to_ord
 from KaggleWord2VecUtility import KaggleWord2VecUtility
 
 THRES_PER = 300000 
@@ -81,7 +88,7 @@ for review in extract_data['review']:
 			else:
 				patterns[pattern] += 1
 		
-		#Have to work-around this with disk IO, unfortunately, because storing all patterns to an in-memory dict requires many many GB worth of RAM.
+		#Have to work-around this with disk IO, unfortunately, because storing all patterns to an in-memory dict requires too much RAM.
 		#Dump all patterns to file every several hundred thousand words or so...
 		if word_dump_log > THRES_PER:
 			print("Pausing to dump patterns to disk...")
@@ -91,12 +98,14 @@ for review in extract_data['review']:
 
 				if out_pattern[1] >= PAT_THRES:
 					old_count = 0
-					if os.path.isfile("pattern_temp/"+out_pattern[0]):
-						f = open("pattern_temp/"+out_pattern[0], 'r')
+					ord_pat = pattern_to_ord(out_pattern[0]) #Have to convert symbols to their ASCII codes, because many symbols are not allowed in file names
+
+					if os.path.isfile("pattern_temp/"+ord_pat):
+						f = open("pattern_temp/"+ord_pat, 'r')
 						old_count = int(f.readline())
 						f.close()
 
-					f = open("pattern_temp/"+out_pattern[0], 'w')
+					f = open("pattern_temp/"+ord_pat, 'w')
 					f.write(str(old_count+out_pattern[1]))
 					f.close()		
 			print("Done. (%0.2fs)" % (time() - t0))	
@@ -107,11 +116,12 @@ for review in extract_data['review']:
 print("Gathering final patterns from disk... (%0.2fs)" % (time() - t0))
 
 patterns = dict()
-for pattern in os.listdir("pattern_temp"):
-	f = open("pattern_temp/"+pattern, 'r')
+for ord_pattern in os.listdir("pattern_temp"):
+	pattern = ord_to_pattern(ord_pattern)
+	f = open("pattern_temp/"+ord_pattern, 'r')
 	patterns[pattern] = int(f.readline())
 	f.close()
-	os.remove("pattern_temp/"+pattern)
+	os.remove("pattern_temp/"+ord_pattern)
 
 print("Writing patterns to file... (%0.2fs)" % (time() - t0))
 f = open("data/sarcasm/extracted_patterns.tsv", 'w')

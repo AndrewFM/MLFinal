@@ -1,10 +1,23 @@
+"""
+Cleans up (prunes) the data extracted by pattern_extractor.py
+In particular, attempts to figure out which of the extracted patterns primarily occurs in sarcastic text, and which primarily occur in non-sarcastic text.
+
+This is done with the help of a sarcasm corpus compiled in (Filatova 2012) "Irony and Sarcasm: Corpus Generation and Analysis Using Crowdsourcing" 
+http://storm.cis.fordham.edu/~filatova/SarcasmCorpus.html
+
+@author andrew
+"""
+
+import nltk.data
 import pandas as pd
 from pattern_functions import load_list_from_file, list_to_dict, sentence_to_patterns
+from KaggleWord2VecUtility import KaggleWord2VecUtility
 from nltk import word_tokenize
 
 print("Loading data...")
 cws = list_to_dict(load_list_from_file('data/sarcasm/CWs.txt'))
 hfws = list_to_dict(load_list_from_file('data/sarcasm/HFWs.txt'))
+sentence_tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
 
 sarcasm_pattern_count = dict()
 regular_pattern_count = dict()
@@ -19,16 +32,16 @@ num_regular_words = 0
 #Sarcasm pattern counts
 print("Counting sarcastic pattern matches...")
 for text in sarcasm_text_data['Text']:
-	tok_text = word_tokenize(text)
-	num_sarcastic_words += len(tok_text)
-	sent_pats = sentence_to_patterns(tok_text, hfws, cws)
+	for tok_text in KaggleWord2VecUtility.review_to_sentences(text, sentence_tokenizer):
+		num_sarcastic_words += len(tok_text)
+		sent_pats = sentence_to_patterns(tok_text, hfws, cws)
 
-	for pattern in sent_pats:
-		if pattern in pattern_data['Pattern'].values:
-			if sarcasm_pattern_count.get(pattern) == None:
-				sarcasm_pattern_count[pattern] = 1
-			else:
-				sarcasm_pattern_count[pattern] += 1
+		for pattern in sent_pats:
+			if pattern in pattern_data['Pattern'].values:
+				if sarcasm_pattern_count.get(pattern) == None:
+					sarcasm_pattern_count[pattern] = 1
+				else:
+					sarcasm_pattern_count[pattern] += 1
 
 #Regular pattern counts
 print("Counting non-sarcastic pattern matches...")
@@ -37,17 +50,18 @@ for i in range(len(sarcasm_file_data)):
 		f = open('data/sarcasm/Regular/'+sarcasm_file_data['File'][i]+'.txt', 'r', encoding='latin-1')
 		found_review = False
 		for line in f:
-			if found_review:
-				tok_text = word_tokenize(line.strip())
-				num_regular_words += len(tok_text)
-				sent_pats = sentence_to_patterns(tok_text, hfws, cws)
-				for pattern in sent_pats:
-					if pattern in pattern_data['Pattern'].values:
-						if regular_pattern_count.get(pattern) == None:
-							regular_pattern_count[pattern] = 1
-						else:
-							regular_pattern_count[pattern] += 1
+			if line.strip() == "</REVIEW>":
 				break
+			if found_review:
+				for tok_text in KaggleWord2VecUtility.review_to_sentences(line, sentence_tokenizer):
+					num_regular_words += len(tok_text)
+					sent_pats = sentence_to_patterns(tok_text, hfws, cws)
+					for pattern in sent_pats:
+						if pattern in pattern_data['Pattern'].values:
+							if regular_pattern_count.get(pattern) == None:
+								regular_pattern_count[pattern] = 1
+							else:
+								regular_pattern_count[pattern] += 1
 			if line.strip() == '<REVIEW>':
 				found_review = True
 

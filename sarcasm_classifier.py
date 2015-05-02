@@ -1,5 +1,17 @@
+"""
+A classifier for detecting if a sentence appears to be written in a sarcastic tone or not.
+Trained primarily on feature vectors based on prevelance of sentence patterns -- those formulated by 'pattern_extractor.py' and 'pattern_analysis.py'
+
+This choice of features is based on (Davidov et.al 2010) "Semi-Supervised Recognition of Sarcastic Sentences in Twitter and Amazon"
+
+@author andrew
+"""
+
 import pandas as pd
 from pattern_functions import load_list_from_file, list_to_dict, sentence_to_patterns
+from sklearn.pipeline import Pipeline
+from sklearn.linear_model import SGDClassifier
+from sklearn.feature_extraction import DictVectorizer
 from nltk import word_tokenize
 
 # Returns counts that are not normalized
@@ -103,8 +115,11 @@ class Classifier():
 		for sent in train_sents:
 			train_data.append(get_sentence_features(sent))
 
-		self.classifier = 
+		self.classifier = Pipeline([('vect', DictVectorizer()),										
+	                      			('clf', SGDClassifier(n_jobs=-1))])	
+		self.classifier.fit_transform(train_data, train_labels)
 
 	def predict(self, tok_sentence):
 		sent_feats = get_sentence_features(tok_sentence)
+		return self.classifier.predict(sent_feats)[0]
 		
