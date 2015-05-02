@@ -3,10 +3,11 @@ import os
 import pandas as pd
 from time import time
 from nltk import word_tokenize
+from pattern_functions import sentence_to_patterns
 from KaggleWord2VecUtility import KaggleWord2VecUtility
 
 THRES_PER = 300000 
-PAT_THRES = 100     # Pattern must occur at least this many times per THRES_PER words to bother considering it relevant.
+PAT_THRES = 50     # Pattern must occur at least this many times per THRES_PER words to bother considering it relevant.
 HFW_THRES = 30      # Term must occur at least this many times per THRES_PER words to be considered 'high frequency'.
 CW_THRES  = 300     # Term must occur at most this many times per THRES_PER words to be considered a 'content word'.
 t0 = time()
@@ -59,33 +60,6 @@ for _ in range(len(word_counts.items())):
 #=======================================================================================
 #  Extract patterns
 #=======================================================================================
-def sentence_to_patterns(tok_sentence, hfws, cws):
-	return_patterns = []
-	for i in range(len(tok_sentence)):
-		return_patterns += pattern_recurse(tok_sentence, hfws, cws, i, "", 0, 0)
-
-	return return_patterns
-
-#Each pattern must have between 2-6 HFWs, and between 1-6 CWs
-def pattern_recurse(tok_sentence, hfws, cws, ind, cur_pattern, num_hfw, num_cw):
-	if ind >= len(tok_sentence) or num_hfw > 6 or num_cw > 6:
-		return []
-
-	pat = cur_pattern
-	pat_so_far = []
-
-	if hfws.get(tok_sentence[ind].lower()) != None:
-		if num_hfw >= 1 and num_cw >= 1:
-			pat_so_far.append(cur_pattern+"_"+tok_sentence[ind].lower())
-		pat_so_far += pattern_recurse(tok_sentence, hfws, cws, ind+1, cur_pattern+"_"+tok_sentence[ind].lower(), num_hfw+1, num_cw)
-
-	if cws.get(tok_sentence[ind].lower()) != None:
-		if num_hfw >= 2:
-			pat_so_far.append(cur_pattern+"_CW")
-		pat_so_far += pattern_recurse(tok_sentence, hfws, cws, ind+1, cur_pattern+"_CW", num_hfw, num_cw+1)	
-
-	return pat_so_far
-
 print("Now, extracting patterns...")
 
 sentence_tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
@@ -140,19 +114,20 @@ for pattern in os.listdir("pattern_temp"):
 	os.remove("pattern_temp/"+pattern)
 
 print("Writing patterns to file... (%0.2fs)" % (time() - t0))
-f = open("extracted_patterns.txt", 'w')
+f = open("data/sarcasm/extracted_patterns.tsv", 'w')
+f.write("Count\tPattern\n")
 for pattern in sorted(patterns, key=patterns.get, reverse=True):
 	pattern_count = patterns[pattern]
-	f.write(str(pattern_count)+":"+pattern+"\n")
+	f.write(str(pattern_count)+"\t"+pattern+"\n")
 f.close()
 
-f = open("HFWs.txt", 'wb')
+f = open("data/sarcasm/HFWs.txt", 'wb')
 for _ in range(len(hfw_dict.items())):
 	hfw = hfw_dict.popitem()
 	f.write(bytes(hfw[0]+"\n", 'utf-8'))
 f.close()
 
-f = open("CWs.txt", 'wb')
+f = open("data/sarcasm/CWs.txt", 'wb')
 for _ in range(len(cw_dict.items())):
 	cw = cw_dict.popitem()
 	f.write(bytes(cw[0]+"\n", 'utf-8'))
