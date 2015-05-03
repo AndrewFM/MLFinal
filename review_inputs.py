@@ -7,11 +7,8 @@ from bs4 import BeautifulSoup
 from nltk.stem.snowball import SnowballStemmer
 from nltk.corpus import stopwords   # Import the stop word list
 from nltk.stem.wordnet import WordNetLemmatizer
+from nltk.corpus import wordnet as wn
 
-
-
-train = pd.read_csv("labeledTrainData.tsv", header=0,
-                    delimiter="\t", quoting=3)
 
 def review_to_words( raw_review ):
     # Function to convert a raw review to a string of words
@@ -46,31 +43,30 @@ def review_to_words( raw_review ):
     # and return the result.
     return (" ".join( lemmatized_word ))
 
-#print (review_to_words(train["review"][0]))
+def rew_raw_file_to_word(file_path):
+    train = pd.read_csv(file_path, header=0,
+                    delimiter="\t", quoting=3)
+    # Get the number of reviews based on the dataframe column size
+    num_reviews = train["review"].size
+    # Initialize an empty list to hold the clean reviews
+    clean_train_reviews = []
+    # Loop over each review; create an index i that goes from 0 to the length
+    # of the movie review list
+    print "Cleaning and parsing the training set movie reviews...\n"
+    file = open("newfile.txt", "w")
+    for i in xrange(0, num_reviews):
+        # Call our function for each one, and add the result to the list of
+        # clean reviews
+        if( (i+1)%1000 == 0 ):
+            print "Review %d of %d\n" % ( i+1, num_reviews )
+        new_word_list = review_to_words( train["review"][i] )
+        file.write(new_word_list)
+        clean_train_reviews.append(new_word_list)
+    file.close()
+    return clean_train_reviews
 
-# Get the number of reviews based on the dataframe column size
-num_reviews = train["review"].size
-
-# Initialize an empty list to hold the clean reviews
-clean_train_reviews = []
-
-# Loop over each review; create an index i that goes from 0 to the length
-# of the movie review list
-#create a new Porter Stemmer to reduce the words to their origin forms
-
-
-file = open("newfile.txt", "w")
-
-print "Cleaning and parsing the training set movie reviews...\n"
-for i in xrange( 0, num_reviews ):
-    # Call our function for each one, and add the result to the list of
-    # clean reviews
-    if( (i+1)%1000 == 0 ):
-        print "Review %d of %d\n" % ( i+1, num_reviews )
-    new_word_list =  review_to_words( train["review"][i] )
-    file.write(new_word_list)
-    clean_train_reviews.append(new_word_list)
-file.close()
-
+if __name__ == "__main__":
+    wordList = rew_raw_file_to_word("labeledTrainData.tsv")
+    print wordList
 
 
