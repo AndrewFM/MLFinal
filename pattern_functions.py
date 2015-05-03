@@ -33,8 +33,9 @@ def pattern_to_ord(pattern):
 def ord_to_pattern(ord_pattern):
 	split_pattern = ord_pattern.split("_")
 	for i in range(len(split_pattern)):
-		if split_pattern[i][0] == 'o' and split_pattern[i][1:].isdigit():
-			split_pattern[i] = chr(int(split_pattern[i][1:]))
+		if len(split_pattern[i]) > 1:
+			if split_pattern[i][0] == 'o' and split_pattern[i][1:].isdigit():
+				split_pattern[i] = chr(int(split_pattern[i][1:]))
 	return '_'.join(split_pattern)
 
 #Finds all patterns contained in a sentence.
@@ -51,6 +52,7 @@ def pattern_recurse(tok_sentence, hfws, cws, ind, cur_pattern, num_hfw, num_cw):
 	if ind >= len(tok_sentence) or num_hfw > 6 or num_cw > 6:
 		return []
 
+	found_one = False #If word is neither in the HFW or CW list, treat it as a CW
 	pat = cur_pattern
 	pat_so_far = []
 
@@ -58,8 +60,9 @@ def pattern_recurse(tok_sentence, hfws, cws, ind, cur_pattern, num_hfw, num_cw):
 		if num_hfw >= 1 and num_cw >= 1:
 			pat_so_far.append(cur_pattern+"_"+tok_sentence[ind].lower())
 		pat_so_far += pattern_recurse(tok_sentence, hfws, cws, ind+1, cur_pattern+"_"+tok_sentence[ind].lower(), num_hfw+1, num_cw)
+		found_one = True
 
-	if cws.get(tok_sentence[ind].lower()) != None:
+	if cws.get(tok_sentence[ind].lower()) != None or found_one == False:
 		if num_hfw >= 2:
 			pat_so_far.append(cur_pattern+"_CW")
 		pat_so_far += pattern_recurse(tok_sentence, hfws, cws, ind+1, cur_pattern+"_CW", num_hfw, num_cw+1)	

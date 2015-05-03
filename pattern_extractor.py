@@ -9,14 +9,13 @@ import nltk.data
 import os
 import pandas as pd
 from time import time
-from nltk import word_tokenize
 from pattern_functions import sentence_to_patterns, ord_to_pattern, pattern_to_ord
 from KaggleWord2VecUtility import KaggleWord2VecUtility
 
-THRES_PER = 300000 
-PAT_THRES = 50     # Pattern must occur at least this many times per THRES_PER words to bother considering it relevant.
-HFW_THRES = 30      # Term must occur at least this many times per THRES_PER words to be considered 'high frequency'.
-CW_THRES  = 300     # Term must occur at most this many times per THRES_PER words to be considered a 'content word'.
+THRES_PER = 200000 
+PAT_THRES = 40     # Pattern must occur at least this many times per THRES_PER words to bother considering it relevant.
+HFW_THRES = 20      # Term must occur at least this many times per THRES_PER words to be considered 'high frequency'.
+CW_THRES  = 200     # Term must occur at most this many times per THRES_PER words to be considered a 'content word'.
 t0 = time()
 
 #=======================================================================================
@@ -27,6 +26,7 @@ print("Loading data to extract patterns from...")
 extract_data = pd.read_csv('data/unlabeledTrainData.tsv', delimiter="\t", quoting=3, quotechar='"', usecols=['review'])
 extract_data = extract_data.append(pd.read_csv('data/testData.tsv', delimiter="\t", quoting=3, quotechar='"', usecols=['review']), ignore_index=True)
 extract_data = extract_data.append(pd.read_csv('data/labeledTrainData.tsv', delimiter="\t", quoting=3, quotechar='"', usecols=['review']), ignore_index=True)
+sentence_tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
 
 print(str(extract_data['review'].size)+" reviews loaded.")
 
@@ -46,12 +46,13 @@ for review in extract_data['review']:
 	if progress_count % 2500 == 0:
 		print("Reviews processed so far: "+str(progress_count)+" (%0.2fs)" % (time() - t0))
 
-	for word in word_tokenize(review):
-		num_words += 1
-		if word_counts.get(word.lower()) == None:
-			word_counts[word.lower()] = 1
-		else:
-			word_counts[word.lower()] += 1
+	for sentence in KaggleWord2VecUtility.review_to_sentences(review, sentence_tokenizer):
+		for word in sentence:
+			num_words += 1
+			if word_counts.get(word.lower()) == None:
+				word_counts[word.lower()] = 1
+			else:
+				word_counts[word.lower()] += 1
 
 print("Total word count: "+str(num_words))
 print("Total unique words: "+str(len(word_counts.items())))
@@ -69,7 +70,6 @@ for _ in range(len(word_counts.items())):
 #=======================================================================================
 print("Now, extracting patterns...")
 
-sentence_tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
 progress_count = 0
 word_dump_log = 0
 patterns = dict()
@@ -108,7 +108,7 @@ for review in extract_data['review']:
 					f = open("pattern_temp/"+ord_pat, 'w')
 					f.write(str(old_count+out_pattern[1]))
 					f.close()		
-			print("Done. (%0.2fs)" % (time() - t0))	
+			print("Done. (%0.2fs)" % (time() - t0))
 
 #=======================================================================================
 #  Output patterns

@@ -4,32 +4,42 @@ A small test program to evaluate the quality of the sarcasm classifier.
 @author andrew
 """
 
-from KaggleWord2VecUtility import KaggleWord2VecUtility
 import nltk.data
+import numpy
+import os
+import pandas as pd
 import sarcasm_classifier
 
 sarcasm_file_data = pd.read_csv('data/sarcasm/five_labels_plus_stars.tsv', delimiter="\t", quoting=3, quotechar='"', usecols=['Type','File'])
-sentence_tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
-train_sents = []
-train_labels = []
+train_reviews = []
+
 for i in range(len(sarcasm_file_data)):
 	f = None
-	if sarcasm_file_data['Type'] == 'regular':
+	if sarcasm_file_data['Type'][i] == 'regular':
 		f = open('data/sarcasm/Regular/'+sarcasm_file_data['File'][i]+'.txt', 'r', encoding='latin-1')
 	else:
 		f = open('data/sarcasm/Ironic/'+sarcasm_file_data['File'][i]+'.txt', 'r', encoding='latin-1')
 
 	review_found = False
+	review = ""
 	for line in f:
-		if line.strip() == "</REVIEW>"
+		if line.strip() == "</REVIEW>":
 			break
 		if review_found:
-			for sent in KaggleWord2VecUtility.review_to_sentences(line, sentence_tokenizer)
-				train_sents.append(sent)
-				train_labels.append(sarcasm_file_data['Type'])
+			review += line.strip()
 		if line.strip() == "<REVIEW>":
 			review_found = True
-
 	f.close()
+	train_reviews.append(review)
 
-classifier = sarcasm_classifier.Classifier(train_sents, train_labels)
+classifier = sarcasm_classifier.Classifier(nltk.data.load('tokenizers/punkt/english.pickle'))
+if os.path.isfile("data/dumps/sarcasm_classifier.pkl"):
+	print("Found pickled sarcasm classifier. Loading it...")
+	classifier.load_pickle('data/dumps/sarcasm_classifier.pkl')
+else:
+	classifier.fit_transform(train_reviews, sarcasm_file_data['Type'])
+	classifier.save_pickle('data/dumps/sarcasm_classifier.pkl')	
+
+while(True):
+	user_sent = input("Enter a sentence:")
+	print("I think your sentence is", classifier.predict_sent(user_sent))

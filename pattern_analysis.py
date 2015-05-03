@@ -12,7 +12,6 @@ import nltk.data
 import pandas as pd
 from pattern_functions import load_list_from_file, list_to_dict, sentence_to_patterns
 from KaggleWord2VecUtility import KaggleWord2VecUtility
-from nltk import word_tokenize
 
 print("Loading data...")
 cws = list_to_dict(load_list_from_file('data/sarcasm/CWs.txt'))
