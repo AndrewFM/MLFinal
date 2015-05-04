@@ -1,7 +1,9 @@
-# -*- coding: utf-8 -*-
 """
+Built and modified from the base tutorial code from the Kaggle Competition, by Angela Chapman.
+
 @author: donghochoi
 """
+
 import re
 import nltk
 import pandas as pd
