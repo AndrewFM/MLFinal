@@ -7,9 +7,8 @@ This choice of features is based on (Davidov et.al 2010) "Semi-Supervised Recogn
 @author andrew
 """
 
-import pandas as pd
-import nltk.data
 import pickle
+import pandas as pd
 from time import time
 from pattern_functions import load_list_from_file, list_to_dict, sentence_to_patterns
 from sklearn.pipeline import Pipeline
@@ -121,17 +120,17 @@ class Classifier():
 			feature_vectors[pattern] = self.get_pattern_match(tok_sentence, self.tok_patterns[i])
 
 		#Other features
-		misc_features = get_misc_features(tok_sentence)
-		feature_vectors['exc_count'] = misc_features['exc_count']/(self.max_exclamations*self.max_avg)
-		feature_vectors['que_count'] = misc_features['que_count']/(self.max_questions*self.max_avg)
-		feature_vectors['quo_count'] = misc_features['quo_count']/(self.max_quotations*self.max_avg)
-		feature_vectors['cap_count'] = misc_features['cap_count']/(self.max_allcaps*self.max_avg)
+		#misc_features = get_misc_features(tok_sentence)
+		#feature_vectors['exc_count'] = misc_features['exc_count']/(self.max_exclamations*self.max_avg)
+		#feature_vectors['que_count'] = misc_features['que_count']/(self.max_questions*self.max_avg)
+		#feature_vectors['quo_count'] = misc_features['quo_count']/(self.max_quotations*self.max_avg)
+		#feature_vectors['cap_count'] = misc_features['cap_count']/(self.max_allcaps*self.max_avg)
 		#feature_vectors['word_count'] = len(tok_sentence)/(self.max_sent_length*self.max_avg)
 
 		return feature_vectors
 
 	#Train the classifier.
-	def fit_transform(self, train_reviews, train_labels):
+	def fit_transform(self, train_reviews, train_labels, dispose_percent=0):
 		print("Training sarcasm classifier...")
 		print("Number of reviews:", len(train_reviews))
 		t0 = time()
@@ -150,7 +149,7 @@ class Classifier():
 			if count_so_far % 100 == 0:
 				print(count_so_far, "reviews processed (%0.2fs)" % (time() - t0))
 			
-			tok_review = KaggleWord2VecUtility.review_to_wordlist(review, case_sensitive=True)
+			tok_review = KaggleWord2VecUtility.review_to_wordlist(review, case_sensitive=True, dispose_percent=dispose_percent)
 			misc_features = get_misc_features(tok_review)
 
 			#self.max_sent_length = max(self.max_sent_length, len(tok_sent))
@@ -170,7 +169,7 @@ class Classifier():
 			count_so_far += 1
 			if count_so_far % 50 == 0:
 				print(count_so_far, "reviews processed (%0.2fs)" % (time() - t0))
-			tok_review = KaggleWord2VecUtility.review_to_wordlist(train_reviews[i], case_sensitive=True)
+			tok_review = KaggleWord2VecUtility.review_to_wordlist(train_reviews[i], case_sensitive=True, dispose_percent=dispose_percent)
 			train_data.append(self.get_sentence_features(tok_review))
 
 		self.classifier = Pipeline([('vect', DictVectorizer()),										
@@ -204,8 +203,8 @@ class Classifier():
 		pickle.dump(persistent_vars, dump)
 		dump.close()	
 
-	def predict(self, review):
-		tok_review = KaggleWord2VecUtility.review_to_wordlist(review, case_sensitive=True)
+	def predict(self, review, dispose_percent=0):
+		tok_review = KaggleWord2VecUtility.review_to_wordlist(review, case_sensitive=True, dispose_percent=dispose_percent)
 		sent_feats = self.get_sentence_features(tok_review)
 		#print(sent_feats)
 		return self.classifier.predict(sent_feats)[0]

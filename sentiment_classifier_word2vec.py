@@ -4,6 +4,7 @@ Built and modified from the base tutorial code from the Kaggle Competition, by A
 """
 
 import os
+import pickle
 import logging
 import nltk.data
 import numpy as np
@@ -67,23 +68,24 @@ def getAvgFeatureVecs(reviews, model, num_features):
     return reviewFeatureVecs
 
 
-def getCleanReviews(reviews, skip=0, limit=0):
+def getCleanReviews(reviews, skip=0, limit=0, dispose_percent=0):
     clean_reviews = []
     if limit == 0:
       for review in reviews["review"][skip:]:
-          clean_reviews.append( KaggleWord2VecUtility.review_to_wordlist( review, remove_stopwords=True ))
+          clean_reviews.append(KaggleWord2VecUtility.review_to_wordlist(review, remove_stopwords=True, dispose_percent=dispose_percent))
     else:
       for review in reviews["review"][skip:limit]:
-          clean_reviews.append( KaggleWord2VecUtility.review_to_wordlist( review, remove_stopwords=True ))
+          clean_reviews.append(KaggleWord2VecUtility.review_to_wordlist(review, remove_stopwords=True, dispose_percent=dispose_percent))
     return clean_reviews
 
 classifier_filename = "data/dumps/sentiment_classifier_w_sarcasm.pkl"
-num_features = 300     # Word vector dimensionality
-min_word_count = 40    # Minimum word count
-num_workers = 4        # Number of threads to run in parallel
-context = 10           # Context window size
-downsampling = 1e-3    # Downsample setting for frequent words
-local_test_size = 2000 # Number of training reviews to reserve for local evaluation
+num_features = 300       # Word vector dimensionality
+min_word_count = 40      # Minimum word count
+num_workers = 4          # Number of threads to run in parallel
+context = 10             # Context window size
+downsampling = 1e-3      # Downsample setting for frequent words
+local_test_size = 2000   # Number of training reviews to reserve for local evaluation
+percent_disposal = 0.25  # Amount of each review to throw away (see note in KaggleWord2VecUtility.py)
 
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 t0 = time()
@@ -128,19 +130,46 @@ else:
   del sentences
   model.save(classifier_filename)
 
-print ("Creating average feature vecs for training reviews")
-trainDataVecs = getAvgFeatureVecs(getCleanReviews(train, skip=local_test_size), model, num_features)
+trainDataVecs = None
+if os.path.isfile('data/dumps/trainDataVecs.pkl'):
+  dump = open('data/dumps/trainDataVecs.pkl', 'rb')
+  trainDataVecs = pickle.load(dump)
+  dump.close()
+else:
+  print ("Creating average feature vecs for training reviews")
+  trainDataVecs = getAvgFeatureVecs(getCleanReviews(train, skip=local_test_size, dispose_percent=percent_disposal), model, num_features)
+  dump = open('data/dumps/trainDataVecs.pkl', 'wb')
+  pickle.dump(trainDataVecs, dump)
+  dump.close()
 
-print ("Creating average feature vecs for test reviews")
-testDataVecs = getAvgFeatureVecs(getCleanReviews(test), model, num_features)
+testDataVecs = None
+if os.path.isfile('data/dumps/testDataVecs.pkl'):
+  dump = open('data/dumps/testDataVecs.pkl', 'rb')
+  testDataVecs = pickle.load(dump)
+  dump.close()
+else:
+  print ("Creating average feature vecs for test reviews")
+  testDataVecs = getAvgFeatureVecs(getCleanReviews(test, dispose_percent=percent_disposal), model, num_features)
+  dump = open('data/dumps/testDataVecs.pkl', 'wb')
+  pickle.dump(testDataVecs, dump)
+  dump.close()
 
 # Fit a random forest to the training data, using 100 trees
-print ("Fitting a random forest to labeled training data...")
-forest = RandomForestClassifier( n_estimators = 100 )
-forest = forest.fit( trainDataVecs, train["sentiment"][local_test_size:] )
+forest = None
+if os.path.isfile('data/dumps/randomForest_word2vec.pkl'):
+  dump = open('data/dumps/randomForest_word2vec.pkl', 'rb')
+  forest = pickle.load(dump)
+  dump.close()
+else:
+  print ("Fitting a random forest to labeled training data...")
+  forest = RandomForestClassifier( n_estimators = 100 )
+  forest = forest.fit(trainDataVecs, train["sentiment"][local_test_size:])
+  dump = open('data/dumps/randomForest_word2vec.pkl', 'wb')
+  pickle.dump(forest, dump)
+  dump.close()
 
 # Test & extract results
-result = forest.predict( testDataVecs )
+'''result = forest.predict(testDataVecs)'''
 del trainDataVecs
 del testDataVecs
 
@@ -177,7 +206,7 @@ else:
     f.close()
     train_reviews.append(review)
 
-  sarc_classifier.fit_transform(train_reviews, sarcasm_file_data['Type'])
+  sarc_classifier.fit_transform(train_reviews, sarcasm_file_data['Type'], dispose_percent=percent_disposal)
   sarc_classifier.save_pickle('data/dumps/sarcasm_classifier.pkl') 
 
 # Modify predictions based on percieved sarcasm:
@@ -193,17 +222,17 @@ def apply_sarcasm(sentiment_predictions, sarcasm_predictions):
 
   return modified_predictions
 
-sarcasm_predictions = []
+'''sarcasm_predictions = []
 for i in range(len(test["review"])):
     if result[i] == 0:
       sarcasm_predictions.append("regular")
     else:
-      sarcasm_predictions.append(sarc_classifier.predict(test["review"][i]))
+      sarcasm_predictions.append(sarc_classifier.predict(test["review"][i], dispose_percent=percent_disposal))
 
     if i % 100 == 0:
       print("Sarcasm predictions so far:", i, "(%0.2fs)" % (time() - t0))
 result = apply_sarcasm(result, sarcasm_predictions)
-del sarcasm_predictions
+del sarcasm_predictions'''
 
 #=======================================================================================================
 #  Local evaluation
@@ -213,33 +242,37 @@ if local_test_size > 0:
   sarcasm_predictions = []
   evaluation_predictions = []
 
-  evalTrainDataVecs = getAvgFeatureVecs(getCleanReviews(train, limit=local_test_size), model, num_features)
+  evalTrainDataVecs = getAvgFeatureVecs(getCleanReviews(train, limit=local_test_size, dispose_percent=percent_disposal), model, num_features)
   eval_result = forest.predict(evalTrainDataVecs)
   for i in range(local_test_size):
     if eval_result[i] == 0:
       sarcasm_predictions.append("regular")
     else:
-      sarcasm_predictions.append(sarc_classifier.predict(train["review"][i]))
+      sarcasm_predictions.append(sarc_classifier.predict(train["review"][i], dispose_percent=percent_disposal))
 
     if i % 100 == 0:
       print("Sarcasm predictions so far:", i, "(%0.2fs)" % (time() - t0))
   new_eval_result = apply_sarcasm(eval_result, sarcasm_predictions)
 
-  num_correct = 0   # Items whose sentiment was correctly classified in the evaluation results
-  sarc_fixed = 0    # Items that were incorrect, but fixed to the correct sentiment by sarcasm disambigution
-  sarc_damaged = 0  # Items that were correct, but were changed to the wrong sentiment by sarcasm disambiguation
-  sarc_missed = 0   # Items that were incorrect, but weren't changed by sarcasm disambiguation
+  num_correct = 0       # Items whose sentiment was correctly classified in the evaluation results
+  num_correct_old = 0   # Items whose sentiment was correctly classified without using sarcasm
+  sarc_fixed = 0        # Items that were incorrect, but fixed to the correct sentiment by sarcasm disambigution
+  sarc_damaged = 0      # Items that were correct, but were changed to the wrong sentiment by sarcasm disambiguation
+  sarc_missed = 0       # Items that were incorrect, but weren't changed by sarcasm disambiguation
   for i in range(local_test_size):
     if new_eval_result[i] == train['sentiment'][i]:
       num_correct += 1
+    if eval_result[i] == train['sentiment'][i]:
+      num_correct_old += 1
     if eval_result[i] != train['sentiment'][i] and new_eval_result[i] == train['sentiment'][i]:
       sarc_fixed += 1
     if eval_result[i] == train['sentiment'][i] and new_eval_result[i] != train['sentiment'][i]:
       sarc_damaged += 1
-    if new_eval_result[i] != train['sentiment'][i] and new_eval_result[i] == "1":
+    if new_eval_result[i] != train['sentiment'][i] and new_eval_result[i] == 1:
       sarc_missed += 1
 
   print("Correctly classified:", num_correct, "out of", local_test_size)
+  print("Correctly classified without sarcasm:", num_correct_old, "out of", local_test_size)
   print("Fixed by sarcasm:", sarc_fixed)
   print("Broken by sarcasm:", sarc_damaged)
   print("Missed by sarcasm:", sarc_missed)
@@ -247,6 +280,6 @@ if local_test_size > 0:
 #=======================================================================================================
 #  Output
 #=======================================================================================================
-output = pd.DataFrame( data={"id":test["id"], "sentiment":result} )
+'''output = pd.DataFrame( data={"id":test["id"], "sentiment":result} )
 output.to_csv( "Word2Vec_Sarcasm_AverageVectors.csv", index=False, quoting=3 )
-print ("Wrote Word2Vec_Sarcasm_AverageVectors.csv (%0.2fs)" % (time() - t0))
+print ("Wrote Word2Vec_Sarcasm_AverageVectors.csv (%0.2fs)" % (time() - t0))'''

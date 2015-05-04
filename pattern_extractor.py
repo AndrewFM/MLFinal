@@ -5,7 +5,6 @@ Pattern extraction based on (Davidov et.al 2010) "Semi-Supervised Recognition of
 @author andrew
 """
 
-import nltk.data
 import os
 import pandas as pd
 from time import time
@@ -26,7 +25,6 @@ print("Loading data to extract patterns from...")
 extract_data = pd.read_csv('data/unlabeledTrainData.tsv', delimiter="\t", quoting=3, quotechar='"', usecols=['review'])
 extract_data = extract_data.append(pd.read_csv('data/testData.tsv', delimiter="\t", quoting=3, quotechar='"', usecols=['review']), ignore_index=True)
 extract_data = extract_data.append(pd.read_csv('data/labeledTrainData.tsv', delimiter="\t", quoting=3, quotechar='"', usecols=['review']), ignore_index=True)
-sentence_tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
 
 print(str(extract_data['review'].size)+" reviews loaded.")
 
@@ -46,13 +44,12 @@ for review in extract_data['review']:
 	if progress_count % 2500 == 0:
 		print("Reviews processed so far: "+str(progress_count)+" (%0.2fs)" % (time() - t0))
 
-	for sentence in KaggleWord2VecUtility.review_to_sentences(review, sentence_tokenizer):
-		for word in sentence:
-			num_words += 1
-			if word_counts.get(word.lower()) == None:
-				word_counts[word.lower()] = 1
-			else:
-				word_counts[word.lower()] += 1
+	for word in KaggleWord2VecUtility.review_to_wordlist(review):
+		num_words += 1
+		if word_counts.get(word.lower()) == None:
+			word_counts[word.lower()] = 1
+		else:
+			word_counts[word.lower()] += 1
 
 print("Total word count: "+str(num_words))
 print("Total unique words: "+str(len(word_counts.items())))
@@ -79,36 +76,36 @@ for review in extract_data['review']:
 	if progress_count % 500 == 0:
 		print("Reviews processed so far: "+str(progress_count)+" (%0.2fs)" % (time() - t0))
 
-	for sentence in KaggleWord2VecUtility.review_to_sentences(review, sentence_tokenizer):
-		word_dump_log += len(sentence)
-		sent_patterns = sentence_to_patterns(sentence, hfw_dict, cw_dict)
-		for pattern in sent_patterns:
-			if patterns.get(pattern) == None:
-				patterns[pattern] = 1
-			else:
-				patterns[pattern] += 1
-		
-		#Have to work-around this with disk IO, unfortunately, because storing all patterns to an in-memory dict requires too much RAM.
-		#Dump all patterns to file every several hundred thousand words or so...
-		if word_dump_log > THRES_PER:
-			print("Pausing to dump patterns to disk...")
-			word_dump_log = 0
-			for _ in range(len(patterns.items())):
-				out_pattern = patterns.popitem()
+	sentence = KaggleWord2VecUtility.review_to_wordlist(review)
+	word_dump_log += len(sentence)
+	sent_patterns = sentence_to_patterns(sentence, hfw_dict, cw_dict)
+	for pattern in sent_patterns:
+		if patterns.get(pattern) == None:
+			patterns[pattern] = 1
+		else:
+			patterns[pattern] += 1
+	
+	#Have to work-around this with disk IO, unfortunately, because storing all patterns to an in-memory dict requires too much RAM.
+	#Dump all patterns to file every several hundred thousand words or so...
+	if word_dump_log > THRES_PER:
+		print("Pausing to dump patterns to disk...")
+		word_dump_log = 0
+		for _ in range(len(patterns.items())):
+			out_pattern = patterns.popitem()
 
-				if out_pattern[1] >= PAT_THRES:
-					old_count = 0
-					ord_pat = pattern_to_ord(out_pattern[0]) #Have to convert symbols to their ASCII codes, because many symbols are not allowed in file names
+			if out_pattern[1] >= PAT_THRES:
+				old_count = 0
+				ord_pat = pattern_to_ord(out_pattern[0]) #Have to convert symbols to their ASCII codes, because many symbols are not allowed in file names
 
-					if os.path.isfile("pattern_temp/"+ord_pat):
-						f = open("pattern_temp/"+ord_pat, 'r')
-						old_count = int(f.readline())
-						f.close()
+				if os.path.isfile("pattern_temp/"+ord_pat):
+					f = open("pattern_temp/"+ord_pat, 'r')
+					old_count = int(f.readline())
+					f.close()
 
-					f = open("pattern_temp/"+ord_pat, 'w')
-					f.write(str(old_count+out_pattern[1]))
-					f.close()		
-			print("Done. (%0.2fs)" % (time() - t0))
+				f = open("pattern_temp/"+ord_pat, 'w')
+				f.write(str(old_count+out_pattern[1]))
+				f.close()		
+		print("Done. (%0.2fs)" % (time() - t0))
 
 #=======================================================================================
 #  Output patterns

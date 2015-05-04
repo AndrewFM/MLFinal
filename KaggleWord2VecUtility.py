@@ -15,7 +15,7 @@ class KaggleWord2VecUtility(object):
     """KaggleWord2VecUtility is a utility class for processing raw HTML text into segments for further learning"""
 
     @staticmethod
-    def review_to_wordlist(review, remove_stopwords=False, remove_punctuation=False, case_sensitive=False):
+    def review_to_wordlist(review, remove_stopwords=False, remove_punctuation=False, case_sensitive=False, dispose_percent=0):
         cleaned_text = BeautifulSoup(review).get_text() #Remove HTML
 
         words = cleaned_text.lower()
@@ -33,7 +33,13 @@ class KaggleWord2VecUtility(object):
         if remove_punctuation:
             words = [w for w in words if w.isalpha() or w.isdigit()]
 
-        return words
+        # Many sarcastic reviews start out with positive sentiment, which devolve into negative sentiment later in the review
+        #    IE: - I'm a huge fan of this series... but this movie was just terrible
+        #        - To be fair, this movie had a great cast of actors... but not even they could save this awful narrative.
+        #
+        # Thus, how about just throwing away some percentage of the intro?
+        dispose_count = int(len(words)*dispose_percent)
+        return words[dispose_count:]
 
     # Take an entire review in raw-text/raw-string form, and convert it into a list of individual sentences.
     # A good tokenizer to use is nltk.data.load('tokenizers/punkt/english.pickle')
