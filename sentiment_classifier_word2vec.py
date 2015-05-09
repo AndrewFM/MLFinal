@@ -15,6 +15,7 @@ from nltk.corpus import stopwords
 from gensim.models import Word2Vec
 from sklearn.ensemble import RandomForestClassifier
 from KaggleWord2VecUtility import KaggleWord2VecUtility
+from project_settings import num_features, min_word_count, num_workers, context, downsampling, local_test_size, percent_disposal
 
 
 def makeFeatureVec(words, model, num_features):
@@ -24,7 +25,7 @@ def makeFeatureVec(words, model, num_features):
     # Pre-initialize an empty numpy array (for speed)
     featureVec = np.zeros((num_features,),dtype="float32")
     #
-    nwords = 0.
+    nwords = 0
     #
     # Index2word is a list that contains the names of the words in
     # the model's vocabulary. Convert it to a set, for speed
@@ -34,20 +35,19 @@ def makeFeatureVec(words, model, num_features):
     # vocaublary, add its feature vector to the total
     for word in words:
         if word in index2word_set:
-            nwords = nwords + 1.
+            nwords = nwords + 1
             featureVec = np.add(featureVec,model[word])
     #
     # Divide the result by the number of words to get the average
     featureVec = np.divide(featureVec,nwords)
     return featureVec
 
-
 def getAvgFeatureVecs(reviews, model, num_features):
     # Given a set of reviews (each one a list of words), calculate
     # the average feature vector for each one and return a 2D numpy array
     #
     # Initialize a counter
-    counter = 0.
+    counter = 0
     #
     # Preallocate a 2D numpy array, for speed
     reviewFeatureVecs = np.zeros((len(reviews),num_features),dtype="float32")
@@ -56,19 +56,17 @@ def getAvgFeatureVecs(reviews, model, num_features):
     for review in reviews:
        #
        # Print a status message every 1000th review
-       if counter%1000. == 0.:
+       if counter % 1000 == 0:
            print("Review {0} of {1}".format(counter, len(reviews)))
        #
        # Call the function (defined above) that makes average feature vectors
-       reviewFeatureVecs[counter] = makeFeatureVec(review, model, \
-           num_features)
+       reviewFeatureVecs[counter] = makeFeatureVec(review, model, num_features)
        #
        # Increment the counter
-       counter = counter + 1.
+       counter = counter + 1
     return reviewFeatureVecs
 
-
-def getCleanReviews(reviews, skip=0, limit=0, dispose_percent=0):
+def getCleanReviews(reviews, skip=0, limit=0, dispose_percent=(0,0)):
     clean_reviews = []
     if limit == 0:
       for review in reviews["review"][skip:]:
@@ -78,15 +76,7 @@ def getCleanReviews(reviews, skip=0, limit=0, dispose_percent=0):
           clean_reviews.append(KaggleWord2VecUtility.review_to_wordlist(review, remove_stopwords=True, dispose_percent=dispose_percent))
     return clean_reviews
 
-classifier_filename = "data/dumps/sentiment_classifier_w_sarcasm.pkl"
-num_features = 300       # Word vector dimensionality
-min_word_count = 40      # Minimum word count
-num_workers = 4          # Number of threads to run in parallel
-context = 10             # Context window size
-downsampling = 1e-3      # Downsample setting for frequent words
-local_test_size = 2000   # Number of training reviews to reserve for local evaluation
-percent_disposal = 0.25  # Amount of each review to throw away (see note in KaggleWord2VecUtility.py)
-
+classifier_filename = "data/dumps/word2vec_model.pkl"
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 t0 = time()
 
@@ -94,14 +84,14 @@ t0 = time()
 #  Read and format data
 #=======================================================================================================
 
-train = pd.read_csv( os.path.join(os.path.dirname(__file__), 'data', 'labeledTrainData.tsv'), header=0, delimiter="\t", quoting=3 )
-test = pd.read_csv(os.path.join(os.path.dirname(__file__), 'data', 'testData.tsv'), header=0, delimiter="\t", quoting=3 )
+train = pd.read_csv('data/labeledTrainData.tsv', header=0, delimiter="\t", quoting=3)
+test = pd.read_csv('data/testData.tsv', header=0, delimiter="\t", quoting=3)
 
 model = None
 if os.path.isfile(classifier_filename):
   model = Word2Vec.load(classifier_filename)
 else:
-  unlabeled_train = pd.read_csv( os.path.join(os.path.dirname(__file__), 'data', "unlabeledTrainData.tsv"), header=0,  delimiter="\t", quoting=3 )
+  unlabeled_train = pd.read_csv('data/unlabeledTrainData.tsv', header=0,  delimiter="\t", quoting=3)
 
   # Verify the number of reviews that were read (100,000 in total)
   print ("Read {0} labeled train reviews, {1} test reviews, and {2} unlabeled reviews\n".format(len(train["review"][local_test_size:]), test["review"].size, unlabeled_train["review"].size ))
@@ -111,11 +101,11 @@ else:
   sentences = []
   print ("Parsing sentences from training set")
   for review in train["review"][local_test_size:]:
-      sentences += KaggleWord2VecUtility.review_to_sentences(review, sent_tokenizer)
+      sentences += KaggleWord2VecUtility.review_to_sentences(review, sent_tokenizer, dispose_percent=percent_disposal)
 
   print ("Parsing sentences from unlabeled set")
   for review in unlabeled_train["review"]:
-      sentences += KaggleWord2VecUtility.review_to_sentences(review, sent_tokenizer)
+      sentences += KaggleWord2VecUtility.review_to_sentences(review, sent_tokenizer, dispose_percent=percent_disposal)
   del unlabeled_train
 
   #=======================================================================================================
@@ -184,15 +174,18 @@ if os.path.isfile("data/dumps/sarcasm_classifier.pkl"):
   print("Found pickled sarcasm classifier. Loading it...")
   sarc_classifier.load_pickle('data/dumps/sarcasm_classifier.pkl')
 else:
+  sarcasm_text_data = pd.read_csv('data/sarcasm/sarcasm_lines.tsv', delimiter="\t", quoting=3, quotechar='"', usecols=['Text'])
   sarcasm_file_data = pd.read_csv('data/sarcasm/five_labels_plus_stars.tsv', delimiter="\t", quoting=3, quotechar='"', usecols=['Type','File'])
   train_reviews = []
+  train_labels = []
 
+  #Regular training data
   for i in range(len(sarcasm_file_data)):
     f = None
     if sarcasm_file_data['Type'][i] == 'regular':
       f = open('data/sarcasm/Regular/'+sarcasm_file_data['File'][i]+'.txt', 'r', encoding='latin-1')
     else:
-      f = open('data/sarcasm/Ironic/'+sarcasm_file_data['File'][i]+'.txt', 'r', encoding='latin-1')
+      continue
 
     review_found = False
     review = ""
@@ -204,9 +197,23 @@ else:
       if line.strip() == "<REVIEW>":
         review_found = True
     f.close()
-    train_reviews.append(review)
+    if review_found:
+      train_reviews.append(review)
+      train_labels.append('regular')
 
-  sarc_classifier.fit_transform(train_reviews, sarcasm_file_data['Type'], dispose_percent=percent_disposal)
+  #Sarcasm training data
+  for review in sarcasm_text_data['Text']:
+    train_reviews.append(review)
+    train_labels.append('ironic')
+
+  for i in range(12000,13000):
+    train_reviews.append(train['review'][i])
+    if train['sentiment'][i] == 0:
+      train_labels.append('ironic')
+    else:
+      train_labels.append('regular')
+
+  sarc_classifier.fit_transform(train_reviews, train_labels, dispose_percent=(0,0))
   sarc_classifier.save_pickle('data/dumps/sarcasm_classifier.pkl') 
 
 # Modify predictions based on percieved sarcasm:
@@ -227,7 +234,7 @@ for i in range(len(test["review"])):
     if result[i] == 0:
       sarcasm_predictions.append("regular")
     else:
-      sarcasm_predictions.append(sarc_classifier.predict(test["review"][i], dispose_percent=percent_disposal))
+      sarcasm_predictions.append(sarc_classifier.predict_review(test["review"][i], dispose_percent=percent_disposal))
 
     if i % 100 == 0:
       print("Sarcasm predictions so far:", i, "(%0.2fs)" % (time() - t0))
@@ -248,7 +255,7 @@ if local_test_size > 0:
     if eval_result[i] == 0:
       sarcasm_predictions.append("regular")
     else:
-      sarcasm_predictions.append(sarc_classifier.predict(train["review"][i], dispose_percent=percent_disposal))
+      sarcasm_predictions.append(sarc_classifier.predict_review(train["review"][i], dispose_percent=percent_disposal))
 
     if i % 100 == 0:
       print("Sarcasm predictions so far:", i, "(%0.2fs)" % (time() - t0))
@@ -259,11 +266,26 @@ if local_test_size > 0:
   sarc_fixed = 0        # Items that were incorrect, but fixed to the correct sentiment by sarcasm disambigution
   sarc_damaged = 0      # Items that were correct, but were changed to the wrong sentiment by sarcasm disambiguation
   sarc_missed = 0       # Items that were incorrect, but weren't changed by sarcasm disambiguation
+  pos_wrong = 0
+  neg_wrong = 0
+  pos_wrong_old = 0
+  neg_wrong_old = 0
+
   for i in range(local_test_size):
     if new_eval_result[i] == train['sentiment'][i]:
       num_correct += 1
+    else:
+      if train['sentiment'][i] == 1:
+        pos_wrong += 1
+      else:
+        neg_wrong += 1
     if eval_result[i] == train['sentiment'][i]:
       num_correct_old += 1
+    else:
+      if train['sentiment'][i] == 1:
+        pos_wrong_old += 1
+      else:
+        neg_wrong_old += 1
     if eval_result[i] != train['sentiment'][i] and new_eval_result[i] == train['sentiment'][i]:
       sarc_fixed += 1
     if eval_result[i] == train['sentiment'][i] and new_eval_result[i] != train['sentiment'][i]:
@@ -271,11 +293,19 @@ if local_test_size > 0:
     if new_eval_result[i] != train['sentiment'][i] and new_eval_result[i] == 1:
       sarc_missed += 1
 
-  print("Correctly classified:", num_correct, "out of", local_test_size)
+  print("\n")
+  print("[Without sarcasm disambiguation]")
   print("Correctly classified without sarcasm:", num_correct_old, "out of", local_test_size)
+  print("Positive sentiment misclassified as negative:", pos_wrong_old)
+  print("Negative sentiment misclassified as positive:", neg_wrong_old)
+  print()
+  print("[With sarcasm disambiguation]")
+  print("Correctly classified:", num_correct, "out of", local_test_size)
+  print("Positive sentiment misclassified as negative:", pos_wrong)
+  print("Negative sentiment misclassified as positive:", neg_wrong)
+  print()
   print("Fixed by sarcasm:", sarc_fixed)
-  print("Broken by sarcasm:", sarc_damaged)
-  print("Missed by sarcasm:", sarc_missed)
+  print("Misclassified by sarcasm:", sarc_damaged)
 
 #=======================================================================================================
 #  Output

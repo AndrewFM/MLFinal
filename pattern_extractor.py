@@ -7,14 +7,12 @@ Pattern extraction based on (Davidov et.al 2010) "Semi-Supervised Recognition of
 
 import os
 import pandas as pd
+import nltk.data
 from time import time
 from pattern_functions import sentence_to_patterns, ord_to_pattern, pattern_to_ord
+from project_settings import THRES_PER, PAT_THRES, HFW_THRES, CW_THRES
 from KaggleWord2VecUtility import KaggleWord2VecUtility
 
-THRES_PER = 200000 
-PAT_THRES = 40     # Pattern must occur at least this many times per THRES_PER words to bother considering it relevant.
-HFW_THRES = 20      # Term must occur at least this many times per THRES_PER words to be considered 'high frequency'.
-CW_THRES  = 200     # Term must occur at most this many times per THRES_PER words to be considered a 'content word'.
 t0 = time()
 
 #=======================================================================================
@@ -25,6 +23,7 @@ print("Loading data to extract patterns from...")
 extract_data = pd.read_csv('data/unlabeledTrainData.tsv', delimiter="\t", quoting=3, quotechar='"', usecols=['review'])
 extract_data = extract_data.append(pd.read_csv('data/testData.tsv', delimiter="\t", quoting=3, quotechar='"', usecols=['review']), ignore_index=True)
 extract_data = extract_data.append(pd.read_csv('data/labeledTrainData.tsv', delimiter="\t", quoting=3, quotechar='"', usecols=['review']), ignore_index=True)
+tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
 
 print(str(extract_data['review'].size)+" reviews loaded.")
 
@@ -44,12 +43,13 @@ for review in extract_data['review']:
 	if progress_count % 2500 == 0:
 		print("Reviews processed so far: "+str(progress_count)+" (%0.2fs)" % (time() - t0))
 
-	for word in KaggleWord2VecUtility.review_to_wordlist(review):
-		num_words += 1
-		if word_counts.get(word.lower()) == None:
-			word_counts[word.lower()] = 1
-		else:
-			word_counts[word.lower()] += 1
+	for sent in KaggleWord2VecUtility.review_to_sentences(review, tokenizer):
+		for word in sent:
+			num_words += 1
+			if word_counts.get(word.lower()) == None:
+				word_counts[word.lower()] = 1
+			else:
+				word_counts[word.lower()] += 1
 
 print("Total word count: "+str(num_words))
 print("Total unique words: "+str(len(word_counts.items())))
@@ -76,14 +76,15 @@ for review in extract_data['review']:
 	if progress_count % 500 == 0:
 		print("Reviews processed so far: "+str(progress_count)+" (%0.2fs)" % (time() - t0))
 
-	sentence = KaggleWord2VecUtility.review_to_wordlist(review)
-	word_dump_log += len(sentence)
-	sent_patterns = sentence_to_patterns(sentence, hfw_dict, cw_dict)
-	for pattern in sent_patterns:
-		if patterns.get(pattern) == None:
-			patterns[pattern] = 1
-		else:
-			patterns[pattern] += 1
+	sentences = KaggleWord2VecUtility.review_to_sentences(review, tokenizer)
+	for sentence in sentences:
+		word_dump_log += len(sentence)
+		sent_patterns = sentence_to_patterns(sentence, hfw_dict, cw_dict)
+		for pattern in sent_patterns:
+			if patterns.get(pattern) == None:
+				patterns[pattern] = 1
+			else:
+				patterns[pattern] += 1
 	
 	#Have to work-around this with disk IO, unfortunately, because storing all patterns to an in-memory dict requires too much RAM.
 	#Dump all patterns to file every several hundred thousand words or so...

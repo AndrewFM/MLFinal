@@ -15,7 +15,7 @@ class KaggleWord2VecUtility(object):
     """KaggleWord2VecUtility is a utility class for processing raw HTML text into segments for further learning"""
 
     @staticmethod
-    def review_to_wordlist(review, remove_stopwords=False, remove_punctuation=False, case_sensitive=False, dispose_percent=0):
+    def review_to_wordlist(review, remove_stopwords=False, remove_punctuation=False, case_sensitive=False, dispose_percent=(0,0)):
         cleaned_text = BeautifulSoup(review).get_text() #Remove HTML
 
         words = cleaned_text.lower()
@@ -33,22 +33,20 @@ class KaggleWord2VecUtility(object):
         if remove_punctuation:
             words = [w for w in words if w.isalpha() or w.isdigit()]
 
-        # Many sarcastic reviews start out with positive sentiment, which devolve into negative sentiment later in the review
-        #    IE: - I'm a huge fan of this series... but this movie was just terrible
-        #        - To be fair, this movie had a great cast of actors... but not even they could save this awful narrative.
-        #
-        # Thus, how about just throwing away some percentage of the intro?
-        dispose_count = int(len(words)*dispose_percent)
+        dispose_count = int(len(words)*dispose_percent[0])
         return words[dispose_count:]
 
     # Take an entire review in raw-text/raw-string form, and convert it into a list of individual sentences.
     # A good tokenizer to use is nltk.data.load('tokenizers/punkt/english.pickle')
     @staticmethod
-    def review_to_sentences(review, tokenizer, remove_stopwords=False, remove_punctuation=False, case_sensitive=False):
+    def review_to_sentences(review, tokenizer, remove_stopwords=False, remove_punctuation=False, case_sensitive=False, dispose_percent=(0,0)):
         raw_sentences = tokenizer.tokenize(review.strip())
+        dispose_sents = int(len(raw_sentences)*dispose_percent[0])
+        if dispose_sents > dispose_percent[1]:
+            dispose_sents = dispose_percent[1]
 
         sentences = []
-        for raw_sentence in raw_sentences:
+        for raw_sentence in raw_sentences[dispose_sents:]:
             if len(raw_sentence) > 0:
                 #The return value will actually be a collection of tokenized sentences
                 sentences.append(KaggleWord2VecUtility.review_to_wordlist(raw_sentence, remove_stopwords, remove_punctuation, case_sensitive))
