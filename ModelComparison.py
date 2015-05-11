@@ -3,7 +3,7 @@
 import os
 import pandas as pd
 import numpy as np 
-
+import nltk.data
 from KaggleWord2VecUtility import KaggleWord2VecUtility
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.ensemble import RandomForestClassifier
@@ -161,6 +161,9 @@ if __name__ == '__main__':
     #
     sentences = []  # Initialize an empty list of sentences
 
+    # Load the punkt tokenizer
+    tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
+    
     print ("Parsing sentences from training set")
     for review in train["review"]:
         sentences += KaggleWord2VecUtility.review_to_sentences(review, tokenizer)
@@ -229,7 +232,7 @@ if __name__ == '__main__':
     index = 0
     x_train =[]
     for review in train_sample["review"]:
-        parsed_sentences = KaggleWord2VecUtility.review_to_wordlist(review,remove_stopwords=True)
+        parsed_sentences = KaggleWord2VecUtility.review_to_wordlist(review,remove_stopwords=False)
         label = str('TRAIN_'+str(index))
         x_train.append(LabeledSentence(parsed_sentences,[label]))
         index += 1
@@ -241,7 +244,7 @@ if __name__ == '__main__':
     index =0
     x_unlabeled = []
     for review in unlabeled_train["review"]:
-        parsed_sentences = KaggleWord2VecUtility.review_to_wordlist(review,remove_stopwords=True)
+        parsed_sentences = KaggleWord2VecUtility.review_to_wordlist(review,remove_stopwords=False)
         label = str('UNL_TRAIN_'+str(index))    
         x_unlabeled.append(LabeledSentence(parsed_sentences,[label]))
         index += 1
@@ -250,7 +253,7 @@ if __name__ == '__main__':
     index = 0
     x_test = []
     for review in test_sample["review"]:
-        parsed_sentences = KaggleWord2VecUtility.review_to_wordlist(review,remove_stopwords=True)
+        parsed_sentences = KaggleWord2VecUtility.review_to_wordlist(review,remove_stopwords=False)
         label = str('TEST_'+str(index))      
         x_test.append(LabeledSentence(parsed_sentences,[label]))
         index += 1  
