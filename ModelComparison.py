@@ -180,7 +180,7 @@ if __name__ == '__main__':
         level=logging.INFO)
 
     # Set values for various parameters
-    num_features = 300    # Word vector dimensionality
+    num_features = 5000    # Word vector dimensionality
     min_word_count = 40   # Minimum word count
     num_workers = 4       # Number of threads to run in parallel
     context = 10          # Context window size
@@ -273,18 +273,20 @@ if __name__ == '__main__':
     x_test = np.array(x_test)
     
     print ("Creating average feature vecs for training reviews")
-    trainDataVecs = getVecs(model_dm, x_train, num_features)
+    #trainDataVecs_Doc2 = getVecs(model_dm, x_train, num_features)
+    trainDataVecs_Doc2 = getAvgFeatureVecs(getCleanReviews(train_sample), model_dm, num_features)
     #trainDataVecs = getAvgFeatureVecs( getCleanReviews(train), model_dm, num_features )
 
     print ("Creating average feature vecs for test reviews")
-    testDataVecs = getVecs(model_dm, x_test, num_features)
+    #testDataVecs_Doc2 = getVecs(model_dm, x_test, num_features)
+    testDataVecs_Doc2 = getAvgFeatureVecs(getCleanReviews(test_sample),model_dm,num_features)
     
     print ("Fitting a random forest to labeled training data...")
-    forest = forest.fit( trainDataVecs, train_sample["sentiment"]  )
-    print ("RandomForestClassifier with Paragraph Vector result: {0}".format(forest.score(testDataVecs, y_test)))
+    forest = forest.fit( trainDataVecs_Doc2, train_sample["sentiment"]  )
+    print ("RandomForestClassifier with Paragraph Vector result: {0}".format(forest.score(testDataVecs_Doc2, y_test)))
     
     # random forest classifier result
-    pred_probas_forest = forest.predict_proba(testDataVecs)[:,1]
+    pred_probas_forest = forest.predict_proba(testDataVecs_Doc2)[:,1]
     
     fpr,tpr,_ = roc_curve(y_test, pred_probas_forest)
     roc_auc = auc(fpr,tpr)
