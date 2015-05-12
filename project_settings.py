@@ -24,4 +24,4 @@ sarcasm_confidence = 0.75 # The classifier must be at least this confident about
 #        - To be fair, this movie had a great cast of actors... but not even they could save this awful narrative.
 #
 # Thus, how about just throwing away some percentage of the intro?
-percent_disposal = 0.25  #Percentage of intro to throw away.
+percent_disposal = (0.2, 3)  #Throw away either [0]% of the intro away, or [1] sentences, whichever is smaller.
