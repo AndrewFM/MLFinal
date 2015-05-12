@@ -99,14 +99,12 @@ if __name__ == '__main__':
 
     # Initialize an empty list to hold the clean reviews
     clean_train_reviews = []
-
     # Loop over each review; create an index i that goes from 0 to the length
     # of the movie review list
 
     print("Cleaning and parsing the training set movie reviews...\n")
     for review in train_sample["review"]:
         clean_train_reviews.append(" ".join(KaggleWord2VecUtility.review_to_wordlist(review, True)))
-
     # ****** Create a bag of words from the training set
     #
     print("Creating the bag of words...\n")
@@ -123,11 +121,9 @@ if __name__ == '__main__':
     # into feature vectors. The input to fit_transform should be a list of
     # strings.
     train_data_features = vectorizer.fit_transform(clean_train_reviews)
-
     # Numpy arrays are easy to work with, so convert the result to an
     # array
     train_data_features = train_data_features.toarray()
-
     # Initialize a Random Forest classifier with 100 trees
     forest = RandomForestClassifier(n_estimators = 100)
 
@@ -136,7 +132,7 @@ if __name__ == '__main__':
     #
     # This may take a few minutes to run
     forest = forest.fit( train_data_features, train_sample["sentiment"] )
-
+    
     # Create an empty list and append the clean reviews one by one
     clean_test_reviews = []
 
@@ -155,6 +151,18 @@ if __name__ == '__main__':
     print ("Predicting test labels...\n")
     #result = forest.predict(test_data_features)
     print ("RandomForestClassifier with Bag-of_Words result: {0}".format(forest.score(test_data_features, y_test)))
+
+    pred_probas_forest = forest.predict_proba(test_data_features)[:,1]
+    
+    fpr,tpr,_ = roc_curve(y_test, pred_probas_forest)
+    roc_auc = auc(fpr,tpr)
+    plt.plot(fpr,tpr,label='area = %.2f' %roc_auc)
+    plt.plot([0, 1], [0, 1], 'k--')
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.legend(loc='lower right')
+    
+    plt.show()
 
     print("------------- Word Vector model ------------")
     # ****** Split the labeled and unlabeled training sets into clean sentences
@@ -180,7 +188,7 @@ if __name__ == '__main__':
         level=logging.INFO)
 
     # Set values for various parameters
-    num_features = 5000    # Word vector dimensionality
+    num_features = 500    # Word vector dimensionality
     min_word_count = 40   # Minimum word count
     num_workers = 4       # Number of threads to run in parallel
     context = 10          # Context window size
@@ -206,7 +214,8 @@ if __name__ == '__main__':
     #
     # Fit a random forest to the training data, using 100 trees
     #forest = RandomForestClassifier( n_estimators = 100 )
-
+    forest = RandomForestClassifier(n_estimators = 100)
+    
     print ("Fitting a random forest to labeled training data...")
     forest = forest.fit( trainDataVecs, train_sample["sentiment"] )
     print ("RandomForestClassifier with Word2Vec result: {0}".format(forest.score(testDataVecs, y_test)))
@@ -273,14 +282,15 @@ if __name__ == '__main__':
     x_test = np.array(x_test)
     
     print ("Creating average feature vecs for training reviews")
-    #trainDataVecs_Doc2 = getVecs(model_dm, x_train, num_features)
-    trainDataVecs_Doc2 = getAvgFeatureVecs(getCleanReviews(train_sample), model_dm, num_features)
+    #trainDataVecs = getVecs(model_dm, x_train, num_features)
+    trainDataVecs_Doc2 = getAvgFeatureVecs(getCleanReviews(train_sample),model_dm,num_features)
     #trainDataVecs = getAvgFeatureVecs( getCleanReviews(train), model_dm, num_features )
 
     print ("Creating average feature vecs for test reviews")
-    #testDataVecs_Doc2 = getVecs(model_dm, x_test, num_features)
+    #testDataVecs = getVecs(model_dm, x_test, num_features)
     testDataVecs_Doc2 = getAvgFeatureVecs(getCleanReviews(test_sample),model_dm,num_features)
     
+    forest = RandomForestClassifier(n_estimators = 100)
     print ("Fitting a random forest to labeled training data...")
     forest = forest.fit( trainDataVecs_Doc2, train_sample["sentiment"]  )
     print ("RandomForestClassifier with Paragraph Vector result: {0}".format(forest.score(testDataVecs_Doc2, y_test)))
