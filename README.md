@@ -1,3 +1,5 @@
+**Project Paper**: [https://www.overleaf.com/read/bhxxvvtkrytk](https://www.overleaf.com/read/bhxxvvtkrytk)
+
 'python ModelComparison.py' runs comparisons between the bag-of-words, Word2Vec, and paragraph vector models. 
 
 'python sentiment_classifier_word2vec.py' runs the sentiment analysis code containing word2vec + the sarcasm classifier, giving accuracy results with and without sarcasm disambiguation. The sarcasm classification was never ported to the main paragraph vector file above, since we were unable to achieve good results with the sarcasm classifier as a standalone. 
